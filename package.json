@@ -1,0 +1,34 @@
+{
+  "name": "firebase-rpc",
+  "version": "0.0.0",
+  "description": "An RPC service using Firebase as a transport.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mbleigh/firebase-rpc.git"
+  },
+  "keywords": [
+    "firebase",
+    "rpc",
+    "microservices"
+  ],
+  "author": "Michael Bleigh",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mbleigh/firebase-rpc/issues"
+  },
+  "homepage": "https://github.com/mbleigh/firebase-rpc",
+  "dependencies": {
+    "firebase": "^2.1.1",
+    "q": "^1.1.2"
+  },
+  "devDependencies": {
+    "browserify": "^8.1.1"
+  },
+  "scripts": {
+    "build": "rm -rf dist && mkdir dist && ./node_modules/.bin/browserify index.js -o dist/firebase-rpc.js -s FirebaseRPC"
+  }
+}
