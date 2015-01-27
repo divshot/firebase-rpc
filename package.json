@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mbleigh/firebase-rpc.git"
+    "url": "https://github.com/divshot/firebase-rpc.git"
   },
   "keywords": [
     "firebase",
@@ -18,9 +18,9 @@
   "author": "Michael Bleigh",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mbleigh/firebase-rpc/issues"
+    "url": "https://github.com/divshot/firebase-rpc/issues"
   },
-  "homepage": "https://github.com/mbleigh/firebase-rpc",
+  "homepage": "https://github.com/divshot/firebase-rpc",
   "dependencies": {
     "firebase": "^2.1.1",
     "q": "^1.1.2"

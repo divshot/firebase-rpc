@@ -13,7 +13,8 @@ Client.prototype.call = function(method) {
 
   var job = this.ref.child(method).push({
     createdAt: Firebase.ServerValue.TIMESTAMP,
-    arguments: args
+    arguments: args,
+    complete: false
   });
 
   var deferred = Q.defer();
@@ -22,9 +23,9 @@ Client.prototype.call = function(method) {
     if (data.complete) {
       job.transaction(function(data) {
         if (data.complete && data.error) {
-          deferred.reject(data.error);
+          deferred.reject(new Error(data.error));
         } else {
-          deferred.reject(data.result);
+          deferred.resolve(data.result);
         }
         data.status = 'accepted';
         data.statusChangedAt = Firebase.ServerValue.TIMESTAMP;
@@ -33,7 +34,7 @@ Client.prototype.call = function(method) {
         return data;
       }, function(err, committed, snap) {
         if (err) {
-          console.log("[" + this.service + "." + method + "] " + err);
+          deferred.reject(err);
         }
       }.bind(this));
     }
@@ -51,11 +52,11 @@ var FirebaseRPC = function(ref) {
 FirebaseRPC.Service = require('./service');
 FirebaseRPC.Client = require('./client');
 
-FirebaseRPC.provide = function(serviceName, callback) {
+FirebaseRPC.prototype.provide = function(serviceName, callback) {
   callback(new FirebaseRPC.Service(this.ref, serviceName));
 }
 
-FirebaseRPC.client = function(serviceName) {
+FirebaseRPC.prototype.service = function(serviceName) {
   return new FirebaseRPC.Client(this.ref, serviceName);
 }
 
@@ -2312,9 +2313,11 @@ return Q;
 var Firebase = require('firebase');
 
 var Service = function(ref, name) {
+  this.top = ref;
   this.ref = ref.child(name);
   this.name = name;
   this.methods = {};
+  this.jobs = {};
 
   this.workerRef = this.ref.child('_workers').push({
     connectedAt: Firebase.ServerValue.TIMESTAMP
@@ -2346,7 +2349,10 @@ Service.prototype.listen = function(method) {
 }
 
 Service.prototype.handle = function(method, snap) {
+  var id = snap.key();
+
   snap.ref().transaction(function(data) {
+    this.jobs[id] = data;
     if (!data.status && !data.worker && !data.complete) {
       data.status = 'processing';
       data.statusChangedAt = Firebase.ServerValue.TIMESTAMP;
@@ -2354,19 +2360,26 @@ Service.prototype.handle = function(method, snap) {
 
       return data;
     }
-  }, function(err, committed, snap) {
+  }.bind(this), function(err, committed, snap) {
+    this.jobs[id] = snap.val();
     if (err) { // the transaction ended abnormally
-      this.methodLog(method, "id=" + snap.key() + " in=handle update=error message=\"" + err + '"');
+      this.methodLog(method, "id=" + id + " in=handle update=error message=\"" + err + '"');
     } else if (committed) { // it's ours! let's process
       try {
-        var result = this.methods[method].apply(this, snap.val().arguments);
-        this.deliver(method, snap.key(), null, result);
+        var result = this.methods[method].apply(this, snap.val().arguments.concat([function(result) {
+          this.deliver(method, snap.key(), null, result);
+        }.bind(this), function(err) {
+          this.deliver(method, snap.key(), err);
+        }.bind(this)]));
       } catch(e) { // the method itself had an error
+        throw e;
         this.deliver(method, snap.key(), e);
       }
     } else { // another worker already grabbed it
-      var val = snap.val();
-      this.methodLog(method, "id=" + snap.key() + " update=skipped status=" + val.status + " worker=" + val.worker + " statusChanged=" + val.statusChanged);
+      if (!this.jobs[id]) {
+        var val = snap.val();
+        this.methodLog(method, "id=" + id + " update=skipped status=" + val.status + " worker=" + val.worker + " statusChanged=" + val.statusChanged);
+      }
     }
   }.bind(this));
 }
@@ -2376,8 +2389,8 @@ Service.prototype.deliver = function(method, id, err, result) {
     if (!data.status === 'processing' || !data.worker === this.workerRef.key() || data.complete) {
       return;
     } else {
-      data.error = err;
-      data.result = result;
+      data.error = err ? err.toString() : null;
+      data.result = result || null;
       data.status = err ? 'error' : 'processed';
       data.statusChangedAt = Firebase.ServerValue.TIMESTAMP;
       data.complete = true;
@@ -2385,17 +2398,19 @@ Service.prototype.deliver = function(method, id, err, result) {
 
       return data;
     }
-  }, function(err, committed, snap) {
+  }.bind(this), function(err, committed, snap) {
+    this.jobs[id] = null;
+
     if (err) {
-      this.methodLog(method, "id=" + snap.key() + " in=handle update=error message=\"" + err + "\"");
+      this.methodLog(method, "id=" + id + " in=handle update=error message=\"" + err + "\"");
     } else if (committed) {
       var val = snap.val();
-      this.methodLog(method, "id=" + snap.key() + " update=processed elapsed=" + (val.completeAt - val.createdAt));
+      this.methodLog(method, "id=" + id + " update=processed elapsed=" + (val.completeAt - val.createdAt));
     } else {
       var val = snap.val();
       this.methodLog(method, "id=" + id + " in=deliver update=error message=out_of_sync elapsed=" + (val.completeAt - val.createdAt));
     }
-  });
+  }.bind(this));
 }
 
 module.exports = Service;
