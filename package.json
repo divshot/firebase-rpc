@@ -4,7 +4,10 @@
   "description": "An RPC service using Firebase as a transport.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npm run clean && npm run browserify && npm run uglify",
+    "browserify": "BROWSERIFYSHIM_DIAGNOSTICS=1 ./node_modules/.bin/browserify index.js -d -x firebase -o dist/firebase-rpc.js -s FirebaseRPC",
+    "uglify": "uglify -s dist/firebase-rpc.js -o dist/firebase-rpc.min.js",
+    "clean": "rm -rf dist && mkdir dist"
   },
   "repository": {
     "type": "git",
@@ -26,9 +29,14 @@
     "q": "^1.1.2"
   },
   "devDependencies": {
-    "browserify": "^8.1.1"
+    "browserify": "^8.1.1",
+    "browserify-shim": "^3.8.2",
+    "uglify": "^0.1.1"
   },
-  "scripts": {
-    "build": "rm -rf dist && mkdir dist && ./node_modules/.bin/browserify index.js -o dist/firebase-rpc.js -s FirebaseRPC"
+  "browserify": {
+    "transform": [ "browserify-shim" ]
+  },
+  "browserify-shim": {
+    "firebase": "global:Firebase"
   }
 }
